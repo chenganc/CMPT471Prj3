@@ -31,7 +31,19 @@
 /* See pseudo-code in sr_arpcache.h */
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
   /* TODO: Fill this in */
-  
+  /* pseudo-code from sr_arpcache.h is as follows:
+
+  if difftime (now, req->sent) > 1.0
+    if req->times_sent >= 5:
+      send icmp host unreachable to source addr of all pkts waiting on this request
+      arpreq_destroy
+    else:
+      send arp request
+      req->sent = now
+      req->times_sent++
+
+  */
+
 }
 
 /*---------------------------------------------------------------------
@@ -57,7 +69,7 @@ void sr_init(struct sr_instance* sr)
     pthread_t thread;
 
     pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
-    
+
     /* TODO: (opt) Add initialization code here */
 
 } /* -- sr_init -- */
@@ -72,7 +84,7 @@ void sr_init(struct sr_instance* sr)
  * ethernet headers.
  *
  * Note: Both the packet buffer and the character's memory are handled
- * by sr_vns_comm.c that means do NOT free either (signified by "lent" comment).  
+ * by sr_vns_comm.c that means do NOT free either (signified by "lent" comment).
  * Make a copy of the
  * packet instead if you intend to keep it around beyond the scope of
  * the method call.
@@ -92,8 +104,7 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d\n",len);
 
   /* TODO: Add forwarding logic here */
- 
-  
+
+
 
 }/* -- sr_handlepacket -- */
-
