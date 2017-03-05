@@ -43,6 +43,19 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
       req->times_sent++
   */
 
+  struct
+  if(difftime(now, req->sent) > 1.0){
+
+      if(req->times_sent >= 5){
+        //send icmp host unreachable to source addr of all pkts waiting on this request
+        sr_arpreq_destroy( , req);
+      }else{
+        //send arp request
+        req->sent = now;
+        req->times_sent++;
+      }
+  }
+
 }
 
 /*---------------------------------------------------------------------
