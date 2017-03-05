@@ -30,7 +30,7 @@
 
 /* See pseudo-code in sr_arpcache.h */
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
-  /* TODO: Fill this in */
+  /* TODO: Cheng */
   /* pseudo-code from sr_arpcache.h is as follows:
 
   if difftime (now, req->sent) > 1.0
@@ -42,7 +42,6 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
       req->sent = now
       req->times_sent++
   */
-  //TEST SAVE
 
 }
 
