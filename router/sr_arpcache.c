@@ -25,7 +25,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 
   // Sherlock is doing this
   struct sr_arpreq *request = sr->cache.requests;
-  for(requset){
+  for(request){s
     handle_arpreq(sr, request);
     request = request->next;
   }
