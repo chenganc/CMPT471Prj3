@@ -43,12 +43,18 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
       req->times_sent++
   */
 
-  struct
+  time_t now;
+  time(&now);
+
+  //or time_t now = time(NULL);
+
+  struct sr_arpcache *sr_cache = &(sr->cache)
+
   if(difftime(now, req->sent) > 1.0){
 
       if(req->times_sent >= 5){
         //send icmp host unreachable to source addr of all pkts waiting on this request
-        sr_arpreq_destroy( , req);
+        sr_arpreq_destroy(sr_cache, req);
       }else{
         //send arp request
         req->sent = now;
@@ -116,6 +122,24 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d\n",len);
 
   /* TODO: Add forwarding logic here */
+  //Cheng
+
+  //Printing header
+  print_hdrs(packet, len);
+  uint16_t packetType = ethertype(packet);
+
+  switch(packetType) {
+    //Case 1 if packet is ip packet / icmp packet
+    case ethertype_ip:
+
+    //Case 2 if packet is arp packet
+    case ethertype_arp:
+
+    case 3:
+
+  }
+
+
 
 
 
