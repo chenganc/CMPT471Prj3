@@ -128,43 +128,47 @@ void sr_handlepacket(struct sr_instance* sr,
   print_hdrs(packet, len);
 
   /*Reading packet type*/
-  uint16_t packetType = ethertype(packet);
+
+  struct sr_ip_hdr *ip_hdr;
+
+  struct sr_rt * target;
+
+  switch(ethertype(packet)){
+
+        /*Case 1 if packet is ip packet / icmp packet*/
+        case ethertype_ip:
+
+          /*Find out if the packet is ip packet or icmp packet*/
+          ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
+          target = NULL;
+          /*Try to match ip dest with the routing table in sr*/
+          struct sr_rt* addr = sr->routing_table;
+          while(addr != NULL){
+            if(addr->dest.s_addr == (addr->mask.s_addr & ip_hdr->ip_dst)){
+              target = addr;
+            }
+            addr = addr->next;
+          }
+
+          if(target != NULL){
+            /*Packet is ip packet and has matching address from routing table*/
+
+            /*Trying sending ip packet*/
+            if(sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)){
+              sr_send_packet(sr,sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)->mac,ETHER_ADDR_LEN,addr->interface);
+            }else{
+              printf("%s\n", "No such address");
+            }
+
+          }else{
+            /*Packet is icmp packet*/
+          }
 
 
-  if(packetType == ethertype_ip) {
+        /*Case 2 if packet is arp packet*/
+        case ethertype_arp:
+            printf("%s\n", "ARP Packet");
 
-    /*Case 1 if packet is ip packet / icmp packet*/
-      /*Find out if the packet is ip packet or icmp packet*/
-      sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-
-      struct sr_rt * target = NULL;
-
-      /*Try to match ip dest with the routing table in sr*/
-      struct sr_rt* addr = sr->routing_table;
-      while(addr != NULL){
-        if(addr->dest.s_addr == (addr->mask.s_addr & ip_hdr->ip_dst)){
-          target = addr;
-        }
-        addr = addr->next;
       }
 
-      if(target != NULL){
-        /*Packet is ip packet and has matching address from routing table*/
-
-        /*Trying sending ip packet*/
-        if(sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)){
-          sr_send_packet(sr,sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)->mac,ETHER_ADDR_LEN,addr->interface);
-        }else{
-          printf("%s\n", "No such address");
-        }
-
-      }else{
-        /*Packet is icmp packet*/
-      }
-
-
-    /*Case 2 if packet is arp packet*/
-    }else{
-        printf("%s\n", "ARP Packet");
-    }
 }/* -- sr_handlepacket -- */
