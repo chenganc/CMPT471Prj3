@@ -126,6 +126,8 @@ void sr_handlepacket(struct sr_instance* sr,
 
   //Printing header
   print_hdrs(packet, len);
+
+  //Reading packet type
   uint16_t packetType = ethertype(packet);
 
   switch(packetType) {
@@ -135,7 +137,6 @@ void sr_handlepacket(struct sr_instance* sr,
     //Case 2 if packet is arp packet
     case ethertype_arp:
 
-    case 3:
 
   }
 
