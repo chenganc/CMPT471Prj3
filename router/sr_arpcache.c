@@ -17,15 +17,15 @@
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) {
   /* TODO: Fill this in */
-  //pseudo-code
-  // void sr_arpcache_sweepreqs(struct sr_instance *sr) {
-  //     for each request on sr->cache.requests:
-  //         handle_arpreq(request)
-  // }
+  /*pseudo-code
+  void sr_arpcache_sweepreqs(struct sr_instance *sr) {
+      for each request on sr->cache.requests:
+           handle_arpreq(request)
+  }*/
 
-  // Sherlock is doing this
+  /* Sherlock is doing this*/
   struct sr_arpreq *request = sr->cache.requests;
-  for(request){s
+  for(request){
     handle_arpreq(sr, request);
     request = request->next;
   }

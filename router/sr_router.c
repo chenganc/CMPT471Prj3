@@ -46,17 +46,17 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
   time_t now;
   time(&now);
 
-  //or time_t now = time(NULL);
+  /*or time_t now = time(NULL);*/
 
-  struct sr_arpcache *sr_cache = &(sr->cache)
+  struct sr_arpcache *sr_cache = &(sr->cache);
 
   if(difftime(now, req->sent) > 1.0){
 
       if(req->times_sent >= 5){
-        //send icmp host unreachable to source addr of all pkts waiting on this request
+        /*send icmp host unreachable to source addr of all pkts waiting on this request*/
         sr_arpreq_destroy(sr_cache, req);
       }else{
-        //send arp request
+        /*send arp request*/
         req->sent = now;
         req->times_sent++;
       }
@@ -122,26 +122,49 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d\n",len);
 
   /* TODO: Add forwarding logic here */
-  //Cheng
+  /*Cheng*/
 
-  //Printing header
+  /*Printing header*/
   print_hdrs(packet, len);
 
-  //Reading packet type
+  /*Reading packet type*/
   uint16_t packetType = ethertype(packet);
 
-  switch(packetType) {
-    //Case 1 if packet is ip packet / icmp packet
-    case ethertype_ip:
 
-    //Case 2 if packet is arp packet
-    case ethertype_arp:
+  if(packetType == ethertype_ip) {
+
+    /*Case 1 if packet is ip packet / icmp packet*/
+      /*Find out if the packet is ip packet or icmp packet*/
+      sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+      struct sr_rt * target = NULL;
+
+      /*Try to match ip dest with the routing table in sr*/
+      struct sr_rt* addr = sr->routing_table;
+      while(addr != NULL){
+        if(addr->dest.s_addr == (addr->mask.s_addr & ip_hdr->ip_dst)){
+          target = addr;
+        }
+        addr = addr->next;
+      }
+
+      if(target != NULL){
+        /*Packet is ip packet and has matching address from routing table*/
+
+        /*Trying sending ip packet*/
+        if(sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)){
+          sr_send_packet(sr,sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)->mac,ETHER_ADDR_LEN,addr->interface);
+        }else{
+          printf("%s\n", "No such address");
+        }
+
+      }else{
+        /*Packet is icmp packet*/
+      }
 
 
-  }
-
-
-
-
-
+    /*Case 2 if packet is arp packet*/
+    }else{
+        printf("%s\n", "ARP Packet");
+    }
 }/* -- sr_handlepacket -- */
