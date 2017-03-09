@@ -154,7 +154,7 @@ void sr_handlepacket(struct sr_instance* sr,
         /*Packet is ip packet and has matching address from routing table*/
 
         /*Trying sending ip packet*/
-        if(sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)){
+        if(sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst) == 0){
           sr_send_packet(sr,sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)->mac,ETHER_ADDR_LEN,addr->interface);
         }else{
           printf("%s\n", "No such address");
@@ -168,7 +168,27 @@ void sr_handlepacket(struct sr_instance* sr,
     /*Case 2 if packet is arp packet*/
     case ethertype_arp:
         printf("%s\n", "Case 2 ARP Packet");
+        arp_handler(sr, packet, len, interface);
 
   }
 
 }/* -- sr_handlepacket -- */
+
+/* arp_handler by Sherlock */
+
+void arp_handler(struct sr_instance* sr,
+      uint8_t * packet/* lent */,
+      unsigned int len,
+      char* interface/* lent */){
+
+  struct *sr_if receive_interface = sr_get_interface(sr, interface);
+
+  if((sr_arpcache_lookup(&sr->cache, arp_header(packet)->ar_sip)) == 0){
+    if((sr_arpcache_insert(&sr->cache, arp_header(packet)->ar_sha, arp_header(packet)->ar_sip)) != 0){
+      send_arp_request_packets(sr, arp_header(packet));
+    }
+  }
+
+}
+
+/* end arp_handler */
