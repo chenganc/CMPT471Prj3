@@ -29,7 +29,7 @@
 /* TODO: Add helper functions here... */
 
 /* Sherlock */
-/* Send arp sneds arps out needs type request/reply given and destination IP and address */
+/* Send arp sends arps out needs type request/reply given and destination IP and address */
 void send_arp(
   struct sr_instance * sr,
   enum sr_arp_opcode arp_opcode,
@@ -37,7 +37,38 @@ void send_arp(
   unsigned char * target_hardware_addr,
   uint32_t target_ip_addr
 ){
+  sr_arp_hdr_t * arp_packet = malloc(sizeof(sr_arp_hdr_t));
+  struct sr_if * receive_interface = sr_get_interface(sr, interface);
+  unsigned int len_frame = sizeof(sr_arp_hdr_t) + sizeof(sr_ethernet_hdr_t);
+  uint8_t * frame = malloc(len_frame);
+  unsigned char * address = NULL;
+  struct sr_if * interface_list = sr->if_list;
 
+  arp_packet->ar_hrd = htons(arp_hrd_ethernet);
+  arp_packet->ar_pro = htons(ethertype_ip);
+  arp_packet->ar_hln = ETHER_ADDR_LEN;
+  arp_packet->ar_pln = 4;
+  arp_packet->ar_op = htons(arp_opcode);
+  memcpy(arp_packet->ar_sha, receive_interface->addr, ETHER_ADDR_LEN);
+  arp_packet->ar_sip = receive_interface->ip;
+  memcpy(arp_packet->ar_tha, target_hardware_addr, ETHER_ADDR_LEN);
+  arp_packet->ar_tip = target_ip_addr;
+
+  memcpy(frame + sizeof(sr_ethernet_hdr_t), arp_packet, sizeof(sr_arp_hdr_t));
+  while(interface_list != NULL){
+    if(strcmp(interface_list->name, interface)){
+      address = interface_list->addr;
+    }
+    interface_list = interface_list->next;
+  }
+
+  memcpy(((sr_ethernet_hdr_t *)frame)->ether_dhost, target_hardware_addr, ETHER_ADDR_LEN);
+  memcpy(((sr_ethernet_hdr_t *)frame)->ether_shost, address, ETHER_ADDR_LEN);
+  ((sr_ethernet_hdr_t *)frame)->ether_type = htons(ethertype_arp);
+
+  sr_send_packet(sr, frame, len_frame, interface);
+  free(frame);
+  free(arp_packet);
 }
 
 
