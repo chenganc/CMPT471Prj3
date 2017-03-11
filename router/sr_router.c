@@ -28,6 +28,70 @@
 
 /* TODO: Add helper functions here... */
 
+/* Sherlock */
+/* Try and send packet otherwise queue it */
+void try_sending(
+  struct sr_instance* sr,
+  uint32_t d_ip, /* destination ip */
+  uint8_t * frame, /* Ethernet frame */
+  unsigned int len_frame,
+  char * interface
+){
+
+}
+
+/* arp_handler by Sherlock */
+
+void arp_handler(
+  struct sr_instance* sr,
+  struct sr_arp_hdr * packet/* lent */,
+  unsigned int len,
+  char* interface/* lent */
+){
+
+  struct sr_if * receive_interface = sr_get_interface(sr, interface);
+  struct sr_arpreq * arp_request;
+  struct sr_packet * request_packet;
+
+  if (receive_interface->ip != packet->ar_tip){
+    printf("This packet is not for me\n");
+    return;
+  }
+
+  /* First check if arp enrty already in my table, if it isn't add it into the cache */
+
+  if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == 0){
+
+    arp_request = sr_arpcache_insert(&(sr->cache), packet->ar_sha, packet->ar_sip);
+    request_packet = arp_request->packets;
+    while(request_packet!=0){
+      try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
+      request_packet = request_packet->next;
+    }
+
+    /* Now check if arp is a request and if it is, send a reply */
+    if (ntohs(packet->ar_op) == arp_op_request){
+
+    }
+
+  }
+
+
+
+  /* Else -- this is a reply and I don't need to do anything */
+
+}
+
+/* end arp_handler */
+
+
+
+
+
+
+
+
+
 /* See pseudo-code in sr_arpcache.h */
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
   /* TODO: Cheng */
@@ -168,27 +232,8 @@ void sr_handlepacket(struct sr_instance* sr,
     /*Case 2 if packet is arp packet*/
     case ethertype_arp:
         printf("%s\n", "Case 2 ARP Packet");
-        arp_handler(sr, packet, len, interface);
+        arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
 
   }
 
 }/* -- sr_handlepacket -- */
-
-/* arp_handler by Sherlock */
-
-void arp_handler(struct sr_instance* sr,
-      uint8_t * packet/* lent */,
-      unsigned int len,
-      char* interface/* lent */){
-
-  struct *sr_if receive_interface = sr_get_interface(sr, interface);
-
-  if((sr_arpcache_lookup(&sr->cache, arp_header(packet)->ar_sip)) == 0){
-    if((sr_arpcache_insert(&sr->cache, arp_header(packet)->ar_sha, arp_header(packet)->ar_sip)) != 0){
-      send_arp_request_packets(sr, arp_header(packet));
-    }
-  }
-
-}
-
-/* end arp_handler */
