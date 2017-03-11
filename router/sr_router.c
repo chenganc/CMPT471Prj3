@@ -256,3 +256,24 @@ void sr_handlepacket(struct sr_instance* sr,
   }
 
 }/* -- sr_handlepacket -- */
+
+/* icmp_sender by Cheng */
+
+void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, uint8_t type, unsigned int len, uint8_t code){
+        int icmp_len = sizeof(sr_icmp_t3_hdr_t);
+        struct sr_icmp_t3_hdr *icmp = calloc(1,icmp_len);
+        memcpy(icmp->data, data, len);
+        icmp->icmp_type = type;
+        icmp->icmp_code = code;
+        icmp->icmp_sum = 0;
+        int cksum = cksum(icmp, icmp_len);
+        if (cksum != 0){
+          icmp->icmp_sum = cksum;
+        }else{
+          icmp->icmp_sum = 0;
+        }
+
+
+}
+
+/* end icmp_sender */
