@@ -49,7 +49,20 @@ void try_sending(
   unsigned int len_frame,
   char * interface
 ){
+  struct sr_arpentry * arp_lookup_result = sr_arpcache_lookup(&(sr->cache), d_ip);
+  struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), d_ip, frame, len_frame, interface);
+  if(arp_lookup_result != NULL){
+    unsigned char * dest_addr;
+    dest_addr = arp_lookup_result->mac;
+    memcpy(((sr_ethernet_hdr_t *)(frame))->ether_dhost, dest_addr, ETHER_ADDR_LEN);
+    sr_send_packet(sr, frame, len_frame, interface);
 
+    free(arp_lookup_result);
+  }
+  /* couldn't find entry, so we're going to send an arp_request for it */
+  else{
+    handle_arpreq(sr, request);
+  }
 }
 
 /* arp_handler by Sherlock */
@@ -81,6 +94,7 @@ void arp_handler(
         try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
         request_packet = request_packet->next;
       }
+      sr_arpreq_destroy(&(sr->cache), arp_request);
 
       /* Now check if arp is a request and if it is, send a reply */
       if (ntohs(packet->ar_op) == arp_op_request){
@@ -109,7 +123,7 @@ void arp_handler(
 
 /* See pseudo-code in sr_arpcache.h */
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
-  /* TODO: Cheng */
+  /* Sherlock */
   /* pseudo-code from sr_arpcache.h is as follows:
 
   if difftime (now, req->sent) > 1.0
@@ -127,15 +141,32 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
 
   /*or time_t now = time(NULL);*/
 
-  struct sr_arpcache *sr_cache = &(sr->cache);
+  struct sr_arpcache * sr_cache = &(sr->cache);
 
   if(difftime(now, req->sent) > 1.0){
 
       if(req->times_sent >= 5){
         /*send icmp host unreachable to source addr of all pkts waiting on this request*/
+        /* Cheng to add icmp function here */
         sr_arpreq_destroy(sr_cache, req);
       }else{
         /*send arp request*/
+        char * interface = NULL;
+        struct sr_rt * routing_table = sr->routing_table;
+        while(routing_table != NULL){
+          if(routing_table->gw.s_addr == req->ip){
+            interface = routing_table->interface;
+          }
+          routing_table = routing_table->next;
+        }
+        if (interface != NULL){
+          uint8_t broadcast_to_everyone[ETHER_ADDR_LEN];
+          int i;
+          for(i = 0; i < ETHER_ADDR_LEN; i++){
+            broadcast_to_everyone[i] = 255;
+          }
+          send_arp(sr, arp_op_request, interface, broadcast_to_everyone, req->ip);
+        }
         req->sent = now;
         req->times_sent++;
       }
