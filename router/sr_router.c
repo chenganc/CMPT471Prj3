@@ -29,9 +29,21 @@
 /* TODO: Add helper functions here... */
 
 /* Sherlock */
+/* Send arp sneds arps out needs type request/reply given and destination IP and address */
+void send_arp(
+  struct sr_instance * sr,
+  enum sr_arp_opcode arp_opcode,
+  char * interface,
+  unsigned char * target_hardware_addr,
+  uint32_t target_ip_addr
+){
+
+}
+
+
 /* Try and send packet otherwise queue it */
 void try_sending(
-  struct sr_instance* sr,
+  struct sr_instance * sr,
   uint32_t d_ip, /* destination ip */
   uint8_t * frame, /* Ethernet frame */
   unsigned int len_frame,
@@ -43,7 +55,7 @@ void try_sending(
 /* arp_handler by Sherlock */
 
 void arp_handler(
-  struct sr_instance* sr,
+  struct sr_instance * sr,
   struct sr_arp_hdr * packet/* lent */,
   unsigned int len,
   char* interface/* lent */
@@ -52,28 +64,35 @@ void arp_handler(
   struct sr_if * receive_interface = sr_get_interface(sr, interface);
   struct sr_arpreq * arp_request;
   struct sr_packet * request_packet;
+  unsigned char * packet_sender_hardware_address;
+  packet_sender_hardware_addr = packet->ar_sha;
+  uint32_t * packet_sender_ip;
+  packet_sender_ip_addr = packet->ar_sip;
 
   if (receive_interface->ip != packet->ar_tip){
     printf("This packet is not for me\n");
     return;
   }
+  else{
 
-  /* First check if arp enrty already in my table, if it isn't add it into the cache */
+    /* First check if arp enrty already in my table, if it isn't add it into the cache */
 
-  if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == 0){
+    if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == 0){
 
-    arp_request = sr_arpcache_insert(&(sr->cache), packet->ar_sha, packet->ar_sip);
-    request_packet = arp_request->packets;
-    while(request_packet!=0){
-      try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
-      request_packet = request_packet->next;
+      arp_request = sr_arpcache_insert(&(sr->cache), packet_sender_hardware_addr, packet_sender_ip_addr);
+      request_packet = arp_request->packets;
+      while(request_packet!=0){
+        try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
+        request_packet = request_packet->next;
+      }
+
+      /* Now check if arp is a request and if it is, send a reply */
+      if (ntohs(packet->ar_op) == arp_op_request){
+
+        send_arp(sr, arp_op_reply, interface, packet_sender_hardware_addr, packet_sender_ip_addr);
+      }
+
     }
-
-    /* Now check if arp is a request and if it is, send a reply */
-    if (ntohs(packet->ar_op) == arp_op_request){
-
-    }
-
   }
 
 
