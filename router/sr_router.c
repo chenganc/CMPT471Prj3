@@ -115,7 +115,7 @@ void arp_handler(
   }
   else{
 
-    /* First check if arp enrty already in my table, if it isn't add it into the cache */
+    /* First check if arp entry already in my table, if it isn't add it into the cache */
 
     if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == 0){
 
@@ -129,16 +129,12 @@ void arp_handler(
 
       /* Now check if arp is a request and if it is, send a reply */
       if (ntohs(packet->ar_op) == arp_op_request){
-
         send_arp(sr, arp_op_reply, interface, packet->ar_sha, packet->ar_sip);
       }
+      /* Else -- this is a reply and I don't need to do anything */
 
     }
   }
-
-
-
-  /* Else -- this is a reply and I don't need to do anything */
 
 }
 
