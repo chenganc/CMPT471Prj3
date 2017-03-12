@@ -65,7 +65,6 @@ void send_arp(
   memcpy(((sr_ethernet_hdr_t *)frame)->ether_dhost, target_hardware_addr, ETHER_ADDR_LEN);
   memcpy(((sr_ethernet_hdr_t *)frame)->ether_shost, address, ETHER_ADDR_LEN);
   ((sr_ethernet_hdr_t *)frame)->ether_type = htons(ethertype_arp);
-
   sr_send_packet(sr, frame, len_frame, interface);
   free(frame);
   free(arp_packet);
@@ -119,23 +118,16 @@ void arp_handler(
 
     if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == NULL){
       arp_request = sr_arpcache_insert(&(sr->cache), packet->ar_sha, packet->ar_sip);
-      printf("arpcache_insert\n");
 
       if(arp_request!= NULL){
-        printf("inside arp_reqeust\n");
         struct sr_packet *request_packet = arp_request->packets;
-
-        printf("before while loop\n");
         while(request_packet){
-          printf("this is before try_sending\n");
           try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
-          printf("this is after try_sending\n");
           request_packet = request_packet->next;
         }
         sr_arpreq_destroy(&(sr->cache), arp_request);
       }
       if (ntohs(packet->ar_op) == arp_op_request){
-        printf("this is before send_arp");
         send_arp(sr, arp_op_reply, interface, packet->ar_sha, packet->ar_sip);
       }
     }
@@ -300,6 +292,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
         /*Trying sending ip packet*/
         if(sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst) == 0){
+          printf("this where it fails?\n");
           sr_send_packet(sr,sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)->mac,ETHER_ADDR_LEN,addr->interface);
         }else{
           printf("%s\n", "No such address");
