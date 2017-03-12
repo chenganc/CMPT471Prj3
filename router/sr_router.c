@@ -56,7 +56,7 @@ void send_arp(
 
   memcpy(frame + sizeof(sr_ethernet_hdr_t), arp_packet, sizeof(sr_arp_hdr_t));
   while(interface_list != NULL){
-    if(strcmp(interface_list->name, interface)){
+    if(strcmp(interface_list->name, interface) == 0){
       address = interface_list->addr;
     }
     interface_list = interface_list->next;
@@ -200,7 +200,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
           for(i = 0; i < ETHER_ADDR_LEN; i++){
             broadcast_to_everyone[i] = 255;
           }
-          send_arp(sr, arp_op_request, interface, broadcast_to_everyone, req->ip);
+          send_arp(sr, arp_op_request, interface, (unsigned char *)broadcast_to_everyone, req->ip);
         }
         req->sent = now;
         req->times_sent++;
