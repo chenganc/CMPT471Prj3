@@ -107,33 +107,41 @@ void arp_handler(
 
   struct sr_if * receive_interface = sr_get_interface(sr, interface);
   struct sr_arpreq * arp_request;
-  struct sr_packet * request_packet;
 
   if (receive_interface->ip != packet->ar_tip){
     printf("This packet is not for me\n");
     return;
   }
   else{
+    printf("This is my packet\n");
 
     /* First check if arp entry already in my table, if it isn't add it into the cache */
 
-    if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == 0){
-
+    if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == NULL){
       arp_request = sr_arpcache_insert(&(sr->cache), packet->ar_sha, packet->ar_sip);
-      request_packet = arp_request->packets;
-      while(request_packet!=0){
-        try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
-        request_packet = request_packet->next;
-      }
-      sr_arpreq_destroy(&(sr->cache), arp_request);
+      printf("arpcache_insert\n");
 
-      /* Now check if arp is a request and if it is, send a reply */
+      if(arp_request!= NULL){
+        printf("inside arp_reqeust\n");
+        struct sr_packet *request_packet = arp_request->packets;
+
+        printf("before while loop\n");
+        while(request_packet){
+          printf("this is before try_sending\n");
+          try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
+          printf("this is after try_sending\n");
+          request_packet = request_packet->next;
+        }
+        sr_arpreq_destroy(&(sr->cache), arp_request);
+      }
       if (ntohs(packet->ar_op) == arp_op_request){
+        printf("this is before send_arp");
         send_arp(sr, arp_op_reply, interface, packet->ar_sha, packet->ar_sip);
       }
-      /* Else -- this is a reply and I don't need to do anything */
-
     }
+    /* Now check if arp is a request and if it is, send a reply */
+
+    /* Else -- this is a reply and I don't need to do anything */
   }
 
 }
@@ -310,24 +318,3 @@ void sr_handlepacket(struct sr_instance* sr,
   }
 
 }/* -- sr_handlepacket -- */
-
-/* icmp_sender by Cheng */
-
-void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, uint8_t type, unsigned int len, uint8_t code){
-        int icmp_len = sizeof(sr_icmp_t3_hdr_t);
-        struct sr_icmp_t3_hdr *icmp = calloc(1,icmp_len);
-        memcpy(icmp->data, data, len);
-        icmp->icmp_type = type;
-        icmp->icmp_code = code;
-        icmp->icmp_sum = 0;
-        int cksum = cksum(icmp, icmp_len);
-        if (cksum != 0){
-          icmp->icmp_sum = cksum;
-        }else{
-          icmp->icmp_sum = 0;
-        }
-
-
-}
-
-/* end icmp_sender */
