@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <time.h>
 
 #include "sr_if.h"
@@ -70,7 +71,6 @@ void send_arp(
   free(arp_packet);
 }
 
-
 /* Try and send packet otherwise queue it */
 void try_sending(
   struct sr_instance * sr,
@@ -82,15 +82,18 @@ void try_sending(
   struct sr_arpentry * arp_lookup_result = sr_arpcache_lookup(&(sr->cache), d_ip);
   struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), d_ip, frame, len_frame, interface);
   if(arp_lookup_result != NULL){
+    printf("%s\n", "ARP: Found entry");
     unsigned char * dest_addr;
     dest_addr = arp_lookup_result->mac;
     memcpy(((sr_ethernet_hdr_t *)(frame))->ether_dhost, dest_addr, ETHER_ADDR_LEN);
+    print_hdrs(frame, len_frame);
     sr_send_packet(sr, frame, len_frame, interface);
 
     free(arp_lookup_result);
   }
   /* couldn't find entry, so we're going to send an arp_request for it */
   else{
+    printf("%s\n", "ARP: Cannot find entry");
     handle_arpreq(sr, request);
   }
 }
@@ -108,26 +111,28 @@ void arp_handler(
   struct sr_arpreq * arp_request;
 
   if (receive_interface->ip != packet->ar_tip){
-    printf("This packet is not for me\n");
+    printf("ARP: This packet is not for me\n");
     return;
   }
   else{
-    printf("This is my packet\n");
+    printf("ARP: This is my packet\n");
 
     /* First check if arp entry already in my table, if it isn't add it into the cache */
 
     if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == NULL){
       arp_request = sr_arpcache_insert(&(sr->cache), packet->ar_sha, packet->ar_sip);
 
-      if(arp_request!= NULL){
+      if(arp_request !=  NULL){
         struct sr_packet *request_packet = arp_request->packets;
         while(request_packet){
           try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
           request_packet = request_packet->next;
         }
+        printf("ARP: Destroying ARP request\n");
         sr_arpreq_destroy(&(sr->cache), arp_request);
       }
       if (ntohs(packet->ar_op) == arp_op_request){
+        printf("ARP: Sending ARP\n");
         send_arp(sr, arp_op_reply, interface, packet->ar_sha, packet->ar_sip);
       }
     }
@@ -268,17 +273,113 @@ void sr_handlepacket(struct sr_instance* sr,
 
   struct sr_ip_hdr *ip_hdr;
 
-  struct sr_rt *target;
 
-  switch(ethertype(packet)){
+  if(ethertype(packet) == ethertype_ip){
 
     /*Case 1 if packet is ip packet / icmp packet*/
-    case ethertype_ip:
+    printf("%s\n", "Case 1 IP Packet");
+
+    bool for_me;
+    for_me = false;
+
+    ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
+
+    /*Trying to match the interface ip with packest's dst ip*/
+    struct sr_if * current_if;
+
+    /*Start with the first interface*/
+    current_if = sr->if_list;
+    while(current_if != NULL){
+      /*Check if the interface ip matches with packet*/
+      if(current_if->ip == ip_hdr->ip_dst){
+        for_me = true;
+      }
+      current_if = current_if->next;
+    }
+
+    /*Check if the packet is destined for me*/
+    if(for_me){
+
+      printf("%s\n", "This packet is destined for this router");
 
       /*Find out if the packet is ip packet or icmp packet*/
-      ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
-      target = NULL;
+      if(ip_hdr->ip_p == ip_protocol_icmp){
+        printf("%s\n", "ICMP");
+
+        /*Make the return packet*/
+        uint8_t * reply_ip_payload = ((uint8_t *)ip_hdr) + (ip_hdr->ip_hl * 4);
+        struct sr_icmp_hdr * reply_icmp_hdr = (sr_icmp_hdr_t *)(reply_ip_payload);
+        unsigned int reply_icmp_payload = ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl * 4) - sizeof(sr_icmp_hdr_t);
+
+        /*Search the matching routing table with packet's source ip*/
+        struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_src);
+
+        /*Search the matching interface with the routing table*/
+        struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+
+        /*Allocate memory for new icmp header*/
+        int reply_icmp_len = sizeof(sr_icmp_hdr_t) + reply_icmp_payload;
+        struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
+
+        /*Copy the icmp payload to icmp header*/
+        memcpy(reply_icmp + 1, (uint8_t *)(reply_icmp_hdr + 1), reply_icmp_payload);
+
+        /* The new ICMP header */
+        reply_icmp->icmp_type = 0;
+        reply_icmp->icmp_code = 0;
+        reply_icmp->icmp_sum = 0;
+        reply_icmp->icmp_sum = cksum(reply_icmp, reply_icmp_len);
+
+        /*Allocate memory for new ethernet packet*/
+        struct sr_ethernet_hdr *reply_eth = calloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + reply_icmp_len, sizeof(uint8_t));
+
+        /* The new ethernet header */
+        reply_eth->ether_type = htons(ethertype_ip);
+
+        /*Copy the ip header to ethernet packet*/
+        memcpy(reply_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
+
+        /*Allocate memory for new ip header*/
+        struct sr_ip_hdr *reply_ip = (sr_ip_hdr_t *)(reply_eth + 1);
+
+        /*Copy the icmp header to ip*/
+        memcpy(reply_ip + 1, (uint8_t *)reply_icmp, reply_icmp_len);
+
+        /* The new IP header */
+        reply_ip->ip_v = 4;
+        reply_ip->ip_off = htons(IP_DF);
+        reply_ip->ip_hl = 5;
+        reply_ip->ip_p = ip_protocol_icmp;
+        reply_ip->ip_src = ip_hdr->ip_dst;
+        reply_ip->ip_dst = ip_hdr->ip_src;
+        reply_ip->ip_len = ip_hdr->ip_len;
+        reply_ip->ip_ttl = 64;
+        reply_ip->ip_sum = 0;
+        reply_ip->ip_sum = cksum(reply_ip, sizeof(sr_ip_hdr_t));
+
+        /*Try sending the new packet*/
+        try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)reply_eth, sizeof(sr_ethernet_hdr_t)+sizeof(sr_ip_hdr_t)+len, matching_if->name);
+
+        /*Freeing memory*/
+        free(reply_eth);
+        free(reply_icmp);
+
+
+
+      }else{
+        /* Received UCP/TCP packet */
+        printf("%s\n", "UDP/TCP");
+
+      }
+
+    }else{
+      /*Packet is not for me*/
+      printf("%s\n", "This packet will be forwarded");
+
       /*Try to match ip dest with the routing table in sr*/
+      struct sr_rt *target;
+      target = NULL;
+
       struct sr_rt* addr = sr->routing_table;
       while(addr != NULL){
         if(addr->dest.s_addr == (addr->mask.s_addr & ip_hdr->ip_dst)){
@@ -287,27 +388,45 @@ void sr_handlepacket(struct sr_instance* sr,
         addr = addr->next;
       }
 
+      /*Packet is ip packet and has matching address from routing table*/
       if(target != NULL){
-        /*Packet is ip packet and has matching address from routing table*/
-
         /*Trying sending ip packet*/
-        if(sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst) == 0){
-          printf("this where it fails?\n");
-          sr_send_packet(sr,sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst)->mac,ETHER_ADDR_LEN,addr->interface);
+        struct sr_arpentry *match;
+        match = NULL;
+        match = sr_arpcache_lookup(&(sr->cache), ip_hdr->ip_dst);
+        if(match != NULL){
+          printf("Found match\n");
+          sr_send_packet(sr,match->mac,ETHER_ADDR_LEN,addr->interface);
         }else{
           printf("%s\n", "No such address");
         }
 
       }else{
-        /*Packet is icmp packet*/
+
       }
+    }
 
-
+  }else{
     /*Case 2 if packet is arp packet*/
-    case ethertype_arp:
-        printf("%s\n", "Case 2 ARP Packet");
-        arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
-
+    printf("%s\n", "Case 2 ARP Packet");
+    arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
   }
 
 }/* -- sr_handlepacket -- */
+
+/*searchTable by Cheng */
+struct sr_rt * search_rt(struct sr_instance *sr, uint32_t ip_dest){
+  /*Try to match ip dest with the routing table in sr*/
+  struct sr_rt* addr = sr->routing_table;
+  struct sr_rt * target = NULL;
+
+  while(addr != NULL){
+    if(addr->dest.s_addr == (addr->mask.s_addr & ip_dest)){
+      target = addr;
+    }
+    addr = addr->next;
+  }
+
+  return target;
+}
+/*searchTable by Cheng */
