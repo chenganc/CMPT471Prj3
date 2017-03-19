@@ -78,6 +78,6 @@ void sr_print_if_list(struct sr_instance* );
 
 /* -- sr_arpcache.c and sr_router.c -- */
 void handle_arpreq(struct sr_instance* , struct sr_arpreq* );
-void send_icmp(struct sr_instance* ,uint8_t *,unsigned int,struct sr_ip_hdr *,int);
+void send_icmp(struct sr_instance* ,uint8_t *,unsigned int,int, int);
 
 #endif /* SR_ROUTER_H */
