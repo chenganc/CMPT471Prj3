@@ -79,8 +79,9 @@ void try_sending(
   unsigned int len_frame,
   char * interface
 ){
+
   struct sr_arpentry * arp_lookup_result = sr_arpcache_lookup(&(sr->cache), d_ip);
-  struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), d_ip, frame, len_frame, interface);
+
   if(arp_lookup_result != NULL){
     printf("%s\n", "ARP: Found entry");
     unsigned char * dest_addr;
@@ -96,6 +97,7 @@ void try_sending(
   /* couldn't find entry, so we're going to send an arp_request for it */
   else{
     printf("%s\n", "ARP: Cannot find entry");
+    struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), d_ip, frame, len_frame, interface);
     handle_arpreq(sr, request);
   }
 }
