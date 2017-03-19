@@ -79,9 +79,7 @@ void try_sending(
   unsigned int len_frame,
   char * interface
 ){
-
   struct sr_arpentry * arp_lookup_result = sr_arpcache_lookup(&(sr->cache), d_ip);
-
   if(arp_lookup_result != NULL){
     printf("%s\n", "ARP: Found entry");
     unsigned char * dest_addr;
@@ -114,7 +112,14 @@ void arp_handler(
   struct sr_if * receive_interface = sr_get_interface(sr, interface);
   struct sr_arpreq * arp_request;
 
+  int min_length = sizeof(sr_arp_hdr_t);
+  if (len < min_length) {
+    fprintf(stderr, "ARP Packet too small\n");
+    return;
+  }
+
   if (receive_interface->ip == packet->ar_tip){
+
     printf("ARP: This is my packet\n");
 
     /* First check if arp entry already in my table, if it isn't add it into the cache */
@@ -138,8 +143,12 @@ void arp_handler(
       }
     }
     /* Now check if arp is a request and if it is, send a reply */
-
     /* Else -- this is a reply and I don't need to do anything */
+    else{
+      printf("Arp entry already exists!! \n");
+    }
+  } else{
+    printf("ARP not for me! \n");
   }
 }
 
