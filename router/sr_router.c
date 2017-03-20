@@ -81,7 +81,7 @@ void try_sending(
 ){
   struct sr_arpentry * arp_lookup_result = sr_arpcache_lookup(&(sr->cache), d_ip);
   if(arp_lookup_result != NULL){
-    printf("%s\n", "ARP: Found entry");
+    /*printf("%s\n", "ARP: Found entry");*/
     unsigned char * dest_addr;
     dest_addr = arp_lookup_result->mac;
     memcpy(((sr_ethernet_hdr_t *)(frame))->ether_dhost, dest_addr, ETHER_ADDR_LEN);
@@ -94,7 +94,7 @@ void try_sending(
   }
   /* couldn't find entry, so we're going to send an arp_request for it */
   else{
-    printf("%s\n", "ARP: Cannot find entry");
+    /*printf("%s\n", "ARP: Cannot find entry");*/
     struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), d_ip, frame, len_frame, interface);
     handle_arpreq(sr, request);
   }
@@ -119,8 +119,7 @@ void arp_handler(
   }
 
   if (receive_interface->ip == packet->ar_tip){
-
-    printf("ARP: This is my packet\n");
+    /*printf("ARP: This is my packet\n");*/
 
     /* First check if arp entry already in my table, if it isn't add it into the cache */
 
@@ -128,7 +127,7 @@ void arp_handler(
       arp_request = sr_arpcache_insert(&(sr->cache), packet->ar_sha, packet->ar_sip);
 
       if (ntohs(packet->ar_op) == arp_op_request){
-        printf("ARP: Sending ARP\n");
+        /*printf("ARP: Sending ARP\n");*/
         send_arp(sr, arp_op_reply, interface, packet->ar_sha, packet->ar_sip);
       }else{
         if(arp_request !=  NULL){
@@ -137,7 +136,7 @@ void arp_handler(
             try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
             request_packet = request_packet->next;
           }
-          printf("ARP: Destroyinig ARP request\n");
+          /*printf("ARP: Destroyinig ARP request\n");*/
           sr_arpreq_destroy(&(sr->cache), arp_request);
         }
       }
@@ -219,7 +218,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
           for(i = 0; i < ETHER_ADDR_LEN; i++){
             broadcast_to_everyone[i] = 255;
           }
-          printf("*****here is sending arp \n");
+          /*printf("*****here is sending arp \n");*/
 
           send_arp(sr, arp_op_request, interface, (unsigned char *)broadcast_to_everyone, req->ip);
         }else{
@@ -303,7 +302,7 @@ void sr_handlepacket(struct sr_instance* sr,
   if(ethertype(packet) == ethertype_ip){
 
     /*Case 1 if packet is ip packet / icmp packet*/
-    printf("%s\n", "Case 1 IP Packet");
+    /*printf("%s\n", "Case 1 IP Packet");*/
 
     bool for_me;
     for_me = false;
@@ -325,17 +324,22 @@ void sr_handlepacket(struct sr_instance* sr,
     /*Check if the packet is destined for me*/
     if((for_me)&&(ip_hdr->ip_p == ip_protocol_icmp)){
 
-      printf("%s\n", "This ICMPT packet is destined for this router");
+      /*printf("%s\n", "This ICMPT packet is destined for this router");*/
 
       /*Sending icmp type 0 code 0 Echo reply*/
       send_icmp(sr,packet,len,0,0);
 
+    }else if((for_me)&&(ip_hdr->ip_p != ip_protocol_icmp)){
+
+      printf("%s\n", "No such address");
+      /*Sending icmp type 3 code 3 Port unreachable*/
+      send_icmp(sr,packet,len,3,3);
     }else{
       /*Packet is not for me*/
 
       /*Decrease ttl by 1*/
       ip_hdr->ip_ttl--;
-      printf("TTL:=%i\n",ip_hdr->ip_ttl);
+      /*printf("TTL:=%i\n",ip_hdr->ip_ttl);*/
 
       /*Compute new checksum*/
       ip_hdr->ip_sum = 0;
@@ -350,48 +354,43 @@ void sr_handlepacket(struct sr_instance* sr,
         send_icmp(sr,packet,len,11,0);
       }else{
 
-        printf("%s\n", "This packet will be forwarded");
+        /*printf("%s\n", "This packet will be forwarded");*/
+        /*
         if(ip_hdr->ip_p == 17){
           printf("%s%i\n", "IP protocol: ", ip_hdr->ip_p);
           print_hdrs(packet, len);
-
-        }
+        }*/
 
         /*Search the matching routing table with packet's source ip*/
         struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_dst);
 
         /*Packet is ip packet and has matching address from routing table*/
-        if(matching_rt != NULL){
-          printf("%s\n", "Found address. Forwarding Packet now");
 
-          /*Search the matching interface with the routing table*/
-          struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+        /*printf("%s\n", "Found address. Forwarding Packet now");*/
 
-          /*Allocate memory for forwarding ethernet packet*/
-          struct sr_ethernet_hdr * forward_eth = malloc(len);
+        /*Search the matching interface with the routing table*/
+        struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
 
-          /*Copy all the content from packet to forward packet*/
-          memcpy(forward_eth, packet, len);
+        /*Allocate memory for forwarding ethernet packet*/
+        struct sr_ethernet_hdr * forward_eth = malloc(len);
 
-          /*Copy the new source into forward packet*/
-          memcpy(forward_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
+        /*Copy all the content from packet to forward packet*/
+        memcpy(forward_eth, packet, len);
 
-          /*Trying sending ip packet*/
-          try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)forward_eth, len, matching_if->name);
+        /*Copy the new source into forward packet*/
+        memcpy(forward_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
 
-          /*Free memory*/
-          free(forward_eth);
+        /*Trying sending ip packet*/
+        try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)forward_eth, len, matching_if->name);
 
-        }else{
-          printf("%s\n", "No such address");
-          /*Sending icmp type 3 code 0 Destination net unreachable*/
-          send_icmp(sr,packet,len,3,0);
-        }
+        /*Free memory*/
+        free(forward_eth);
+
       }
     }
   }else{
     /*Case 2 if packet is arp packet*/
-    printf("%s\n", "Case 2 ARP Packet");
+    /*printf("%s\n", "Case 2 ARP Packet");*/
     arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
   }
 
@@ -433,11 +432,8 @@ void send_icmp(struct sr_instance* sr,
 
     /*Search the matching interface with the routing table*/
     struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+    /*sr_print_if(matching_if);*/
 
-    if(matching_if == NULL){
-      printf("%s\n", "!!!!!!!!!!!!!!!!!!!!!!!!No such address");
-
-    }
     /*Allocate memory for new icmp header*/
     int reply_icmp_len = sizeof(sr_icmp_t3_hdr_t) + reply_icmp_payload;
     struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
@@ -468,8 +464,8 @@ void send_icmp(struct sr_instance* sr,
     reply_ip->ip_v = 4;
     reply_ip->ip_off = htons(IP_DF);
     reply_ip->ip_hl = 5;
-    reply_ip->ip_p = ip_hdr->ip_p;
-    reply_ip->ip_src = ip_hdr->ip_dst;
+    reply_ip->ip_p = ip_protocol_icmp;;
+    reply_ip->ip_src = matching_if->ip;
     reply_ip->ip_dst = ip_hdr->ip_src;
     reply_ip->ip_len = ip_hdr->ip_len;
     reply_ip->ip_ttl = ip_hdr->ip_ttl;
@@ -546,6 +542,9 @@ void send_icmp(struct sr_instance* sr,
     /*Freeing memory*/
     free(reply_eth);
     free(reply_icmp);
+
+
+
 
   }
 }
