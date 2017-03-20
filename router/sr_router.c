@@ -467,8 +467,8 @@ void send_icmp(struct sr_instance* sr,
     reply_ip->ip_p = ip_protocol_icmp;;
     reply_ip->ip_src = matching_if->ip;
     reply_ip->ip_dst = ip_hdr->ip_src;
-    reply_ip->ip_len = ip_hdr->ip_len;
-    reply_ip->ip_ttl = ip_hdr->ip_ttl;
+    reply_ip->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
+    reply_ip->ip_ttl = 64;
     reply_ip->ip_sum = 0;
     reply_ip->ip_sum = cksum(reply_ip, sizeof(sr_ip_hdr_t));
 
