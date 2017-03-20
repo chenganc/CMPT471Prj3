@@ -137,7 +137,7 @@ void arp_handler(
             try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
             request_packet = request_packet->next;
           }
-          printf("ARP: Destroying ARP request\n");
+          printf("ARP: Destroyinig ARP request\n");
           sr_arpreq_destroy(&(sr->cache), arp_request);
         }
       }
@@ -190,16 +190,16 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
         /*send icmp host unreachable to source addr of all pkts waiting on this request*/
         /* Cheng to add icmp function here */
 
-        printf("!!!!!!!!!!!Core dump\n");
+        /*printf("!!!!!!!!!!!Core dump\n");*/
 
         struct sr_packet *req_packets = req->packets;
         while(req_packets != NULL){
           /*Sending icmp type 3 code 1 Time exceeded*/
-          /*send_icmp(sr,req_packets->buf,sizeof(req_packets->buf),3,1);*/
+          send_icmp(sr,req_packets->buf,sizeof(req_packets->buf),3,1);
           req_packets = req_packets->next;
         }
 
-        printf("!!!!!!!!!!!Core dump end\n");
+        /*printf("!!!!!!!!!!!Core dump end\n");*/
 
         sr_arpreq_destroy(sr_cache, req);
 
@@ -222,6 +222,8 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
           printf("*****here is sending arp \n");
 
           send_arp(sr, arp_op_request, interface, (unsigned char *)broadcast_to_everyone, req->ip);
+        }else{
+          printf("*****No such interface \n");
         }
         req->sent = now;
         req->times_sent++;
@@ -295,7 +297,7 @@ void sr_handlepacket(struct sr_instance* sr,
 
   /*Reading packet type*/
 
-  struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));;
+  struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
 
 
   if(ethertype(packet) == ethertype_ip){
@@ -320,36 +322,47 @@ void sr_handlepacket(struct sr_instance* sr,
       current_if = current_if->next;
     }
 
-    /*Decrease ttl by 1*/
-    ip_hdr->ip_ttl--;
-    printf("TTL:=%i\n",ip_hdr->ip_ttl);
+    /*Check if the packet is destined for me*/
+    if((for_me)&&(ip_hdr->ip_p == ip_protocol_icmp)){
 
-    /*Compute new checksum*/
-    ip_hdr->ip_sum = 0;
-    /*ip_hdr->ip_sum = cksum(ip_hdr, ip_hdr->ip_hl * 4);*/
-    ip_hdr->ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+      printf("%s\n", "This ICMPT packet is destined for this router");
 
-    /*Check if ttl is equal to 0*/
-    if(ip_hdr->ip_ttl != 0){
+      /*Sending icmp type 0 code 0 Echo reply*/
+      send_icmp(sr,packet,len,0,0);
 
-      /*Check if the packet is destined for me*/
-      if((for_me)&&(ip_hdr->ip_p == ip_protocol_icmp)){
+    }else{
+      /*Packet is not for me*/
 
-        printf("%s\n", "This ICMPT packet is destined for this router");
+      /*Decrease ttl by 1*/
+      ip_hdr->ip_ttl--;
+      printf("TTL:=%i\n",ip_hdr->ip_ttl);
 
-        /*Sending icmp type 0 code 0 Echo reply*/
-        send_icmp(sr,packet,len,0,0);
+      /*Compute new checksum*/
+      ip_hdr->ip_sum = 0;
+      /*ip_hdr->ip_sum = cksum(ip_hdr, ip_hdr->ip_hl * 4);*/
+      ip_hdr->ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
 
+      /*Check if ttl is equal to 0*/
+      if(ip_hdr->ip_ttl == 0){
+        /*Should be sending icmp type 11*/
+        printf("%s\n", "*****************************************************TTL expired");
+        /*Sending icmp type 11 code 0 Time exceeded*/
+        send_icmp(sr,packet,len,11,0);
       }else{
-        /*Packet is not for me*/
+
         printf("%s\n", "This packet will be forwarded");
+        if(ip_hdr->ip_p == 17){
+          printf("%s%i\n", "IP protocol: ", ip_hdr->ip_p);
+          print_hdrs(packet, len);
+
+        }
 
         /*Search the matching routing table with packet's source ip*/
         struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_dst);
 
         /*Packet is ip packet and has matching address from routing table*/
         if(matching_rt != NULL){
-          printf("%s\n", "Found address");
+          printf("%s\n", "Found address. Forwarding Packet now");
 
           /*Search the matching interface with the routing table*/
           struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
@@ -375,17 +388,7 @@ void sr_handlepacket(struct sr_instance* sr,
           send_icmp(sr,packet,len,3,0);
         }
       }
-
-
-
-    }else{
-      /*Should be sending icmp type 11*/
-      printf("%s\n", "*****************************************************TTL expired");
-      /*Sending icmp type 11 code 0 Time exceeded*/
-      send_icmp(sr,packet,len,11,0);
     }
-
-
   }else{
     /*Case 2 if packet is arp packet*/
     printf("%s\n", "Case 2 ARP Packet");
@@ -417,65 +420,133 @@ void send_icmp(struct sr_instance* sr,
         unsigned int len,
         int type,
         int code){
+  /*Sending type 3 icmp packet*/
+  if((type == 3)||(type = 11)){
 
-  /*Make the return packet*/
-  struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));;
-  uint8_t * reply_ip_payload = ((uint8_t *)ip_hdr) + (ip_hdr->ip_hl * 4);
-  struct sr_icmp_hdr * reply_icmp_hdr = (sr_icmp_hdr_t *)(reply_ip_payload);
-  unsigned int reply_icmp_payload = ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl * 4) - sizeof(sr_icmp_hdr_t);
+    struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));;
+    uint8_t * reply_ip_payload = ((uint8_t *)ip_hdr) + (ip_hdr->ip_hl * 4);
+    struct sr_icmp_t3_hdr * reply_icmp_hdr = (sr_icmp_t3_hdr_t *)(reply_ip_payload);
+    unsigned int reply_icmp_payload = ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl * 4) - sizeof(sr_icmp_t3_hdr_t);
 
-  /*Search the matching routing table with packet's source ip*/
-  struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_src);
+    /*Search the matching routing table with packet's dst ip*/
+    struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_src);
 
-  /*Search the matching interface with the routing table*/
-  struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+    /*Search the matching interface with the routing table*/
+    struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
 
-  /*Allocate memory for new icmp header*/
-  int reply_icmp_len = sizeof(sr_icmp_hdr_t) + reply_icmp_payload;
-  struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
+    if(matching_if == NULL){
+      printf("%s\n", "!!!!!!!!!!!!!!!!!!!!!!!!No such address");
 
-  /*Copy the icmp payload to icmp header*/
-  memcpy(reply_icmp + 1, (uint8_t *)(reply_icmp_hdr + 1), reply_icmp_payload);
+    }
+    /*Allocate memory for new icmp header*/
+    int reply_icmp_len = sizeof(sr_icmp_t3_hdr_t) + reply_icmp_payload;
+    struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
 
-  /* The new ICMP header */
-  reply_icmp->icmp_type = type;
-  reply_icmp->icmp_code = code;
-  reply_icmp->icmp_sum = 0;
-  reply_icmp->icmp_sum = cksum(reply_icmp, reply_icmp_len);
 
-  /*Allocate memory for new ethernet packet*/
-  struct sr_ethernet_hdr *reply_eth = calloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + reply_icmp_len, sizeof(uint8_t));
+    memcpy(reply_icmp_hdr->data, ip_hdr, ip_hdr->ip_hl * 4);
+    reply_icmp->icmp_type = type;
+    reply_icmp->icmp_code = code;
+    reply_icmp->icmp_sum = 0;
+    reply_icmp->icmp_sum = cksum(reply_icmp, reply_icmp_len);
 
-  /* The new ethernet header */
-  reply_eth->ether_type = htons(ethertype_ip);
+    /*Allocate memory for new ethernet packet*/
+    struct sr_ethernet_hdr *reply_eth = calloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + reply_icmp_len, sizeof(uint8_t));
 
-  /*Copy the ip header to ethernet packet*/
-  memcpy(reply_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
+    /* The new ethernet header */
+    reply_eth->ether_type = htons(ethertype_ip);
 
-  /*Allocate memory for new ip header*/
-  struct sr_ip_hdr *reply_ip = (sr_ip_hdr_t *)(reply_eth + 1);
+    /*Copy the ip header to ethernet packet*/
+    memcpy(reply_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
 
-  /*Copy the icmp header to ip*/
-  memcpy(reply_ip + 1, (uint8_t *)reply_icmp, reply_icmp_len);
+    /*Allocate memory for new ip header*/
+    struct sr_ip_hdr *reply_ip = (sr_ip_hdr_t *)(reply_eth + 1);
 
-  /* The new IP header */
-  reply_ip->ip_v = 4;
-  reply_ip->ip_off = htons(IP_DF);
-  reply_ip->ip_hl = 5;
-  reply_ip->ip_p = ip_protocol_icmp;
-  reply_ip->ip_src = ip_hdr->ip_dst;
-  reply_ip->ip_dst = ip_hdr->ip_src;
-  reply_ip->ip_len = ip_hdr->ip_len;
-  reply_ip->ip_ttl = 64;
-  reply_ip->ip_sum = 0;
-  reply_ip->ip_sum = cksum(reply_ip, sizeof(sr_ip_hdr_t));
+    /*Copy the icmp header to ip*/
+    memcpy(reply_ip + 1, (uint8_t *)reply_icmp, reply_icmp_len);
 
-  /*Try sending the new packet*/
-  try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)reply_eth, sizeof(sr_ethernet_hdr_t)+sizeof(sr_ip_hdr_t)+len, matching_if->name);
+    /* The new IP header */
+    reply_ip->ip_v = 4;
+    reply_ip->ip_off = htons(IP_DF);
+    reply_ip->ip_hl = 5;
+    reply_ip->ip_p = ip_hdr->ip_p;
+    reply_ip->ip_src = ip_hdr->ip_dst;
+    reply_ip->ip_dst = ip_hdr->ip_src;
+    reply_ip->ip_len = ip_hdr->ip_len;
+    reply_ip->ip_ttl = ip_hdr->ip_ttl;
+    reply_ip->ip_sum = 0;
+    reply_ip->ip_sum = cksum(reply_ip, sizeof(sr_ip_hdr_t));
 
-  /*Freeing memory*/
-  free(reply_eth);
-  free(reply_icmp);
 
+    /*Try sending the new packet*/
+    try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)reply_eth, sizeof(sr_ethernet_hdr_t)+sizeof(sr_ip_hdr_t)+len, matching_if->name);
+
+    /*Freeing memory*/
+    free(reply_eth);
+    free(reply_icmp);
+
+
+
+  }else{
+    /*Sending all other types of icmp packet*/
+    /*Make the return packet*/
+    struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));;
+    uint8_t * reply_ip_payload = ((uint8_t *)ip_hdr) + (ip_hdr->ip_hl * 4);
+    struct sr_icmp_hdr * reply_icmp_hdr = (sr_icmp_hdr_t *)(reply_ip_payload);
+    unsigned int reply_icmp_payload = ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl * 4) - sizeof(sr_icmp_hdr_t);
+
+    /*Search the matching routing table with packet's source ip*/
+    struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_src);
+
+    /*Search the matching interface with the routing table*/
+    struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+
+    /*Allocate memory for new icmp header*/
+    int reply_icmp_len = sizeof(sr_icmp_hdr_t) + reply_icmp_payload;
+    struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
+
+    /*Copy the icmp payload to icmp header*/
+    memcpy(reply_icmp + 1, (uint8_t *)(reply_icmp_hdr + 1), reply_icmp_payload);
+
+    /* The new ICMP header */
+    reply_icmp->icmp_type = type;
+    reply_icmp->icmp_code = code;
+    reply_icmp->icmp_sum = 0;
+    reply_icmp->icmp_sum = cksum(reply_icmp, reply_icmp_len);
+
+    /*Allocate memory for new ethernet packet*/
+    struct sr_ethernet_hdr *reply_eth = calloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + reply_icmp_len, sizeof(uint8_t));
+
+    /* The new ethernet header */
+    reply_eth->ether_type = htons(ethertype_ip);
+
+    /*Copy the ip header to ethernet packet*/
+    memcpy(reply_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
+
+    /*Allocate memory for new ip header*/
+    struct sr_ip_hdr *reply_ip = (sr_ip_hdr_t *)(reply_eth + 1);
+
+    /*Copy the icmp header to ip*/
+    memcpy(reply_ip + 1, (uint8_t *)reply_icmp, reply_icmp_len);
+
+    /* The new IP header */
+    reply_ip->ip_v = 4;
+    reply_ip->ip_off = htons(IP_DF);
+    reply_ip->ip_hl = 5;
+    reply_ip->ip_p = ip_protocol_icmp;
+    reply_ip->ip_src = ip_hdr->ip_dst;
+    reply_ip->ip_dst = ip_hdr->ip_src;
+    reply_ip->ip_len = ip_hdr->ip_len;
+    reply_ip->ip_ttl = 64;
+    reply_ip->ip_sum = 0;
+    reply_ip->ip_sum = cksum(reply_ip, sizeof(sr_ip_hdr_t));
+
+    /*Try sending the new packet*/
+    try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)reply_eth, sizeof(sr_ethernet_hdr_t)+sizeof(sr_ip_hdr_t)+len, matching_if->name);
+
+    /*Freeing memory*/
+    free(reply_eth);
+    free(reply_icmp);
+
+  }
 }
 /*send_icmp by Cheng */
