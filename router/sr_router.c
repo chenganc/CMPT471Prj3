@@ -56,6 +56,7 @@ void send_arp(
   arp_packet->ar_tip = target_ip_addr;
 
   memcpy(frame + sizeof(sr_ethernet_hdr_t), arp_packet, sizeof(sr_arp_hdr_t));
+
   while(interface_list != NULL){
     if(strcmp(interface_list->name, interface) == 0){
       address = interface_list->addr;
@@ -66,7 +67,9 @@ void send_arp(
   memcpy(((sr_ethernet_hdr_t *)frame)->ether_dhost, target_hardware_addr, ETHER_ADDR_LEN);
   memcpy(((sr_ethernet_hdr_t *)frame)->ether_shost, address, ETHER_ADDR_LEN);
   ((sr_ethernet_hdr_t *)frame)->ether_type = htons(ethertype_arp);
+
   sr_send_packet(sr, frame, len_frame, interface);
+
   free(frame);
   free(arp_packet);
 }
@@ -80,21 +83,22 @@ void try_sending(
   char * interface
 ){
   struct sr_arpentry * arp_lookup_result = sr_arpcache_lookup(&(sr->cache), d_ip);
+  unsigned char * dest_addr;
+
   if(arp_lookup_result != NULL){
-    /*printf("%s\n", "ARP: Found entry");*/
-    unsigned char * dest_addr;
     dest_addr = arp_lookup_result->mac;
     memcpy(((sr_ethernet_hdr_t *)(frame))->ether_dhost, dest_addr, ETHER_ADDR_LEN);
+
     /*printf("%s\n", "------------------------------------Sent Packet------------------------------------");
     print_hdrs(frame, len_frame);
     printf("%s\n", "----------------------------------Sent Packet End----------------------------------");*/
-    sr_send_packet(sr, frame, len_frame, interface);
 
+    sr_send_packet(sr, frame, len_frame, interface);
     free(arp_lookup_result);
   }
+
   /* couldn't find entry, so we're going to send an arp_request for it */
   else{
-    /*printf("%s\n", "ARP: Cannot find entry");*/
     struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), d_ip, frame, len_frame, interface);
     handle_arpreq(sr, request);
   }
@@ -108,41 +112,40 @@ void arp_handler(
   unsigned int len,
   char* interface/* lent */
 ){
-  printf("1\n");
-
   struct sr_if * receive_interface = sr_get_interface(sr, interface);
   if(receive_interface == NULL){
       printf("2\n");
       return;
   }
 
-
   struct sr_arpreq * arp_request;
 
-  int min_length = sizeof(sr_arp_hdr_t);
-  if (len < min_length) {
-    fprintf(stderr, "ARP Packet too small\n");
+  int minimum_lenght = sizeof(sr_arp_hdr_t);
+  if (len < minimum_lenght) {
+    printf("ARP Packet too small\n");
     return;
   }
 
   if (receive_interface->ip == packet->ar_tip){
-    /*printf("ARP: This is my packet\n");*/
 
     /* First check if arp entry already in my table, if it isn't add it into the cache */
-
     if (sr_arpcache_lookup(&(sr->cache), packet->ar_sip) == NULL){
       arp_request = sr_arpcache_insert(&(sr->cache), packet->ar_sha, packet->ar_sip);
 
+      /* if arp header contains arp_op_request -- send arp reply */
       if (ntohs(packet->ar_op) == arp_op_request){
         /*printf("ARP: Sending ARP\n");*/
         send_arp(sr, arp_op_reply, interface, packet->ar_sha, packet->ar_sip);
-      }else{
+      }
+      /* else, try sending it */
+      else{
         if(arp_request !=  NULL){
           struct sr_packet *request_packet = arp_request->packets;
           while(request_packet){
             try_sending(sr, arp_request->ip, request_packet->buf, request_packet->len, request_packet->iface);
             request_packet = request_packet->next;
           }
+
           /*printf("ARP: Destroyinig ARP request\n");*/
           sr_arpreq_destroy(&(sr->cache), arp_request);
         }
@@ -151,7 +154,7 @@ void arp_handler(
     /* Now check if arp is a request and if it is, send a reply */
     /* Else -- this is a reply and I don't need to do anything */
     else{
-      /*printf("Arp entry already exists!! \n");*/
+      printf("Arp entry already exists!! \n");
     }
   } else{
     printf("ARP not for me! \n");
@@ -160,33 +163,11 @@ void arp_handler(
 
 /* end arp_handler */
 
-
-
-
-
-
-
-
-
 /* See pseudo-code in sr_arpcache.h */
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
   /* Sherlock */
-  /* pseudo-code from sr_arpcache.h is as follows:
-
-  if difftime (now, req->sent) > 1.0
-    if req->times_sent >= 5:
-      send icmp host unreachable to source addr of all pkts waiting on this request
-      arpreq_destroy
-    else:
-      send arp request
-      req->sent = now
-      req->times_sent++
-  */
-
   time_t now;
   time(&now);
-
-  /*or time_t now = time(NULL);*/
 
   struct sr_arpcache * sr_cache = &(sr->cache);
 
@@ -196,8 +177,6 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
         /*send icmp host unreachable to source addr of all pkts waiting on this request*/
         /* Cheng to add icmp function here */
 
-        /*printf("!!!!!!!!!!!Core dump\n");*/
-
         struct sr_packet *req_packets = req->packets;
         while(req_packets != NULL){
           /*Sending icmp type 3 code 1 Time exceeded*/
@@ -206,20 +185,22 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
           req_packets = req_packets->next;
         }
 
-        /*printf("!!!!!!!!!!!Core dump end\n");*/
-
+        /* remove from queue because it exceeded time */
         sr_arpreq_destroy(sr_cache, req);
 
       }else{
         /*send arp request*/
         char * interface = NULL;
         struct sr_rt * routing_table = sr->routing_table;
+        /* Check routing tabel for matching address and then take interface */
         while(routing_table != NULL){
           if(routing_table->gw.s_addr == req->ip){
             interface = routing_table->interface;
           }
           routing_table = routing_table->next;
         }
+
+        /* If tehre is matching interface then broadcast request to everyone and then wait for reply */
         if(interface != NULL){
           uint8_t broadcast_to_everyone[ETHER_ADDR_LEN];
           int i;
@@ -332,8 +313,6 @@ void sr_handlepacket(struct sr_instance* sr,
     /*Check if the packet is destined for me*/
     if((for_me)&&(ip_hdr->ip_p == ip_protocol_icmp)){
 
-      /*printf("%s\n", "This ICMPT packet is destined for this router");*/
-
       /*Sending icmp type 0 code 0 Echo reply*/
       send_icmp(sr,packet,len,0,0);
 
@@ -347,35 +326,22 @@ void sr_handlepacket(struct sr_instance* sr,
 
       /*Decrease ttl by 1*/
       ip_hdr->ip_ttl--;
-      /*printf("TTL:=%i\n",ip_hdr->ip_ttl);*/
 
       /*Compute new checksum*/
       ip_hdr->ip_sum = 0;
-      /*ip_hdr->ip_sum = cksum(ip_hdr, ip_hdr->ip_hl * 4);*/
       ip_hdr->ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
 
       /*Check if ttl is equal to 0*/
       if(ip_hdr->ip_ttl == 0){
-        /*Should be sending icmp type 11*/
-        /*printf("%s\n", "*****************************************************TTL expired");*/
+
         /*Sending icmp type 11 code 0 Time exceeded*/
         send_icmp(sr,packet,len,11,0);
       }else{
-
-        /*printf("%s\n", "This packet will be forwarded");*/
-        /*
-        if(ip_hdr->ip_p == 17){
-          printf("%s%i\n", "IP protocol: ", ip_hdr->ip_p);
-          print_hdrs(packet, len);
-        }*/
 
         /*Search the matching routing table with packet's source ip*/
         struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_dst);
 
         /*Packet is ip packet and has matching address from routing table*/
-
-        /*printf("%s\n", "Found address. Forwarding Packet now");*/
-
         /*Search the matching interface with the routing table*/
         struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
 
@@ -398,9 +364,18 @@ void sr_handlepacket(struct sr_instance* sr,
       }
     }
   }else if(ethertype(packet) == ethertype_arp){
-    /*Case 2 if packet is arp packet*/
+    /* Case 2 if packet is arp packet -- pass on to arp_handler function */
     printf("%s\n", "Case 2 ARP Packet");
-    arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
+
+    struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_dst);
+    if (matching_rt==NULL){
+      printf("NULL ALERT!!!");
+      struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), ip_hdr->ip_dst, packet, len, interface);
+      handle_arpreq(sr, request);
+    }
+    else{
+      arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
+    }
   }else{
     printf("%s\n", "TCP/UDP Packet");
 
@@ -411,7 +386,7 @@ void sr_handlepacket(struct sr_instance* sr,
 /*search_rt by Cheng */
 struct sr_rt * search_rt(struct sr_instance *sr, uint32_t ip_dest){
   /*Try to match ip dest with the routing table in sr*/
-  struct sr_rt* addr = sr->routing_table;
+  struct sr_rt * addr = sr->routing_table;
   struct sr_rt * target = NULL;
 
   while(addr != NULL){
