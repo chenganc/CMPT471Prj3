@@ -108,8 +108,15 @@ void arp_handler(
   unsigned int len,
   char* interface/* lent */
 ){
+  printf("1\n");
 
   struct sr_if * receive_interface = sr_get_interface(sr, interface);
+  if(receive_interface == NULL){
+      printf("2\n");
+      return;
+  }
+
+
   struct sr_arpreq * arp_request;
 
   int min_length = sizeof(sr_arp_hdr_t);
@@ -293,7 +300,7 @@ void sr_handlepacket(struct sr_instance* sr,
   /*Cheng*/
 
   /*Printing header*/
-  /*print_hdrs(packet, len);*/
+  print_hdrs(packet, len);
 
   /*Reading packet type*/
 
@@ -390,10 +397,13 @@ void sr_handlepacket(struct sr_instance* sr,
 
       }
     }
-  }else{
+  }else if(ethertype(packet) == ethertype_arp){
     /*Case 2 if packet is arp packet*/
     printf("%s\n", "Case 2 ARP Packet");
     arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
+  }else{
+    printf("%s\n", "TCP/UDP Packet");
+
   }
 
 }/* -- sr_handlepacket -- */
