@@ -298,8 +298,19 @@ void sr_handlepacket(struct sr_instance* sr,
 
   struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
 
+  int minimum_length = sizeof(sr_ethernet_hdr_t);
+  if (len < minimum_length) {
+    printf("Ethernet Packet too small, terminating\n");
+    return;
+  }
 
   if(ethertype(packet) == ethertype_ip){
+
+    minimum_length = sizeof(sr_ip_hdr_t) + sizeof(sr_ethernet_hdr_t);
+    if (len < minimum_length) {
+      printf("IP Packet too small, terminating\n");
+      return;
+    }
 
     /*Case 1 if packet is ip packet / icmp packet*/
     /*printf("%s\n", "Case 1 IP Packet");*/
