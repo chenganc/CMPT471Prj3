@@ -366,16 +366,7 @@ void sr_handlepacket(struct sr_instance* sr,
   }else if(ethertype(packet) == ethertype_arp){
     /* Case 2 if packet is arp packet -- pass on to arp_handler function */
     printf("%s\n", "Case 2 ARP Packet");
-
-    struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_dst);
-    if (matching_rt==NULL){
-      printf("NULL ALERT!!!");
-      struct sr_arpreq * request = sr_arpcache_queuereq(&(sr->cache), ip_hdr->ip_dst, packet, len, interface);
-      handle_arpreq(sr, request);
-    }
-    else{
-      arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
-    }
+    arp_handler(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), (len - sizeof(sr_ethernet_hdr_t)), interface);
   }else{
     printf("%s\n", "TCP/UDP Packet");
 
