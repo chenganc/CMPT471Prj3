@@ -1,0 +1,28 @@
+Group Members:
+Cheng-An Chen - chenganc
+Sherlock Lau - sla166
+
+Work Division:
+Cheng-An:
+ICMP, IP
+
+Sherlock:
+Arp
+
+
+Known Bugs/Issues: all bugs or issues that you know of in your code
+
+
+
+Code Design: Briefly describe the design of your code and the data structures implemented. 
+ICMP:
+IP:
+
+Arp:
+If packet is of type ARP - Runs Arp Handler
+Arp Handler: 
+First check if arp entry already in my table, if it isn't add it into the cache with insert
+Check if arp_op_code is of type request, if it is, send an arp reply.
+If its not a request, then we try sending the packet in the queue.
+In the try_sending function, we look the destination IP. If there is a find, we send the packet. If there isn't a match, then we queue a arp request in the cache and pass it to arp request handler function.
+In the arp request handler function, we broadcast an arp request to evereyone up to 5 times. If we still don't receive a reply after this, we send an ICMP of type 3 code 1 (time exceeeded) and remove the request from the queue.
