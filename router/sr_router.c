@@ -50,8 +50,10 @@ void send_arp(
   arp_packet->ar_hln = ETHER_ADDR_LEN;
   arp_packet->ar_pln = 4;
   arp_packet->ar_op = htons(arp_opcode);
+
   memcpy(arp_packet->ar_sha, receive_interface->addr, ETHER_ADDR_LEN);
   arp_packet->ar_sip = receive_interface->ip;
+
   memcpy(arp_packet->ar_tha, target_hardware_addr, ETHER_ADDR_LEN);
   arp_packet->ar_tip = target_ip_addr;
 
@@ -114,7 +116,7 @@ void arp_handler(
 ){
   struct sr_if * receive_interface = sr_get_interface(sr, interface);
   if(receive_interface == NULL){
-      printf("2\n");
+      printf("Receive Interface is Null, returning\n");
       return;
   }
 
@@ -177,7 +179,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
         /*send icmp host unreachable to source addr of all pkts waiting on this request*/
         /* Cheng to add icmp function here */
 
-        struct sr_packet *req_packets = req->packets;
+        struct sr_packet * req_packets = req->packets;
         while(req_packets != NULL){
           /*Sending icmp type 3 code 1 Time exceeded*/
           printf("%s\n", "Type 3 code 1");
@@ -345,20 +347,25 @@ void sr_handlepacket(struct sr_instance* sr,
         /*Search the matching interface with the routing table*/
         struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
 
-        /*Allocate memory for forwarding ethernet packet*/
-        struct sr_ethernet_hdr * forward_eth = malloc(len);
+        if ((matching_rt != NULL) && (matching_if != NULL)){
+          /*Allocate memory for forwarding ethernet packet*/
+          struct sr_ethernet_hdr * forward_eth = malloc(len);
 
-        /*Copy all the content from packet to forward packet*/
-        memcpy(forward_eth, packet, len);
+          /*Copy all the content from packet to forward packet*/
+          memcpy(forward_eth, packet, len);
 
-        /*Copy the new source into forward packet*/
-        memcpy(forward_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
+          /*Copy the new source into forward packet*/
+          memcpy(forward_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
 
-        /*Trying sending ip packet*/
-        try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)forward_eth, len, matching_if->name);
+          /*Trying sending ip packet*/
+          try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)forward_eth, len, matching_if->name);
 
-        /*Free memory*/
-        free(forward_eth);
+          /*Free memory*/
+          free(forward_eth);
+        }
+        else{
+          printf("matching_rt or matching_if is NULL!\n");
+        }
 
 
       }
@@ -412,8 +419,18 @@ void send_icmp(struct sr_instance* sr,
     /*Search the matching routing table with packet's source ip*/
     struct sr_rt * matching_rt = search_rt(sr, old_ip_hdr->ip_src);
 
+    if(matching_rt == NULL){
+      printf("matching_rt in type 3 is null, terminating\n");
+      return;
+    }
+
     /*Search the matching interface with the routing table*/
     struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+
+    if(matching_if == NULL){
+      printf("matching_if in type 3 is null, terminating\n");
+      return;
+    }
 
     /*Allocate memory for new icmp header*/
     int reply_icmp_len = sizeof(sr_icmp_t3_hdr_t) + offset + 4;
@@ -477,8 +494,18 @@ void send_icmp(struct sr_instance* sr,
     /*Search the matching routing table with packet's source ip*/
     struct sr_rt * matching_rt = search_rt(sr, old_ip_hdr->ip_src);
 
+    if(matching_rt == NULL){
+      printf("matching_rt in type 11 is null, terminating\n");
+      return;
+    }
+
     /*Search the matching interface with the routing table*/
     struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+
+    if(matching_if == NULL){
+      printf("matching_if in type 11 is null, terminating\n");
+      return;
+    }
 
     /*Allocate memory for new icmp header*/
     int reply_icmp_len = sizeof(sr_icmp_hdr_t) + offset + 4;
@@ -540,8 +567,18 @@ void send_icmp(struct sr_instance* sr,
     /*Search the matching routing table with packet's source ip*/
     struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_src);
 
+    if(matching_rt == NULL){
+      printf("matching_rt is null, terminating\n");
+      return;
+    }
+
     /*Search the matching interface with the routing table*/
     struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
+
+    if(matching_if == NULL){
+      printf("matching_if is null, terminating\n");
+      return;
+    }
 
     /*Allocate memory for new icmp header*/
     int reply_icmp_len = sizeof(sr_icmp_hdr_t) + reply_icmp_payload;
