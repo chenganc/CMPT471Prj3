@@ -122,9 +122,14 @@ void arp_handler(
 
   struct sr_arpreq * arp_request;
 
-  int minimum_lenght = sizeof(sr_arp_hdr_t);
-  if (len < minimum_lenght) {
+  int minimum_length = sizeof(sr_arp_hdr_t);
+  if (len < minimum_length) {
     printf("ARP Packet too small\n");
+    return;
+  }
+
+  if(packet->ar_tip == '\0'){
+    printf("packet->ar_tip is NULL, terminating \n");
     return;
   }
 
@@ -150,6 +155,10 @@ void arp_handler(
 
           /*printf("ARP: Destroyinig ARP request\n");*/
           sr_arpreq_destroy(&(sr->cache), arp_request);
+        }
+        else{
+          printf("arp_request is NULL, terminating\n");
+          return;
         }
       }
     }
