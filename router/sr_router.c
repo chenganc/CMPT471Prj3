@@ -554,11 +554,11 @@ void send_icmp(struct sr_instance* sr,
   }else{
     /*Sending all other types of icmp packet*/
 
-    /*Coping the old packet with proper header length*/
+    /*Copying the old packet with proper header length*/
     unsigned int ip_offset = old_ip_hdr->ip_hl * 4;
     uint8_t * reply_ip_payload = ((uint8_t *)old_ip_hdr) + ip_offset;
 
-    /*Coping the reply ip payload into the icmp header*/
+    /*Copying the reply ip payload into the icmp header*/
     struct sr_icmp_hdr * reply_icmp_hdr = (sr_icmp_hdr_t *)(reply_ip_payload);
     unsigned int reply_icmp_payload = ntohs(old_ip_hdr->ip_len) - ip_offset - sizeof(sr_icmp_hdr_t);
 
@@ -608,6 +608,7 @@ void send_icmp(struct sr_instance* sr,
     /*Freeing memory*/
     free(reply_eth);
     free(reply_icmp);
+
   }
 }
 /*send_icmp by Cheng */
