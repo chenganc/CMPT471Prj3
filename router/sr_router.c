@@ -449,11 +449,11 @@ void send_icmp(struct sr_instance* sr,
     int reply_ip_len = sizeof(sr_ip_hdr_t) + reply_icmp_len;
 
     /*Copying the old ip content*/
-    uint8_t * old_ip = malloc(icmp_offset);
+    uint8_t *old_ip = calloc(icmp_offset, 1);
     memcpy(old_ip + 4, old_ip_hdr, offset);
 
     /*Allocate memory for new icmp header*/
-    struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
+    struct sr_icmp_hdr *reply_icmp = malloc(reply_icmp_len);
 
     /*Allocate memory for new ethernet packet*/
     struct sr_ethernet_hdr *reply_eth = calloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + reply_icmp_len, sizeof(uint8_t));
@@ -506,14 +506,14 @@ void send_icmp(struct sr_instance* sr,
     unsigned int offset = (old_ip_hdr->ip_hl * 4) + 8;
     unsigned int icmp_offset = offset + 4;
     int reply_icmp_len = sizeof(sr_icmp_hdr_t) + icmp_offset;
-    int reply_ip_len = sizeof(sr_icmp_hdr_t) + icmp_offset;
+    int reply_ip_len = sizeof(sr_ip_hdr_t) + reply_icmp_len;
 
     /*Copying the old ip content*/
     uint8_t *old_ip = malloc(icmp_offset);
     memcpy(old_ip + 4, old_ip_hdr, offset);
 
     /*Allocate memory for new icmp header*/
-    struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
+    struct sr_icmp_hdr *reply_icmp = malloc(reply_icmp_len);
 
     /*Allocate memory for new ethernet packet*/
     struct sr_ethernet_hdr *reply_eth = calloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + reply_icmp_len, sizeof(uint8_t));
@@ -560,7 +560,6 @@ void send_icmp(struct sr_instance* sr,
     free(old_ip);
 
   }else{
-
     /*Sending all other types of icmp packet*/
     /*Copying the old packet with proper header length*/
     unsigned int ip_offset = old_ip_hdr->ip_hl * 4;
@@ -572,7 +571,7 @@ void send_icmp(struct sr_instance* sr,
 
     /*Allocate memory for new icmp header*/
     int reply_icmp_len = sizeof(sr_icmp_hdr_t) + reply_icmp_payload;
-    struct sr_icmp_hdr *reply_icmp = calloc(reply_icmp_len, 1);
+    struct sr_icmp_hdr *reply_icmp = malloc(reply_icmp_len);
 
     /*Allocate memory for new ethernet packet*/
     struct sr_ethernet_hdr *reply_eth = calloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + reply_icmp_len, sizeof(uint8_t));
