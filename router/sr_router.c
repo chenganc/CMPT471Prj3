@@ -439,7 +439,10 @@ void send_icmp(struct sr_instance* sr,
     /*Computing the offset from the old ip header length + first 8 bytes of the old packet*/
     unsigned int offset = (old_ip_hdr->ip_hl * 4) + 8;
     unsigned int icmp_offset = offset + 4;
+
+    /*Copying the old ip content*/
     uint8_t *old_ip = calloc(icmp_offset, 1);
+    memcpy(old_ip + 4, old_ip_hdr, offset);
 
     /*Allocate memory for new icmp header*/
     int reply_icmp_len = sizeof(sr_icmp_t3_hdr_t) + icmp_offset;
@@ -451,12 +454,11 @@ void send_icmp(struct sr_instance* sr,
     /*Allocate memory for new ip header*/
     struct sr_ip_hdr *reply_ip = (sr_ip_hdr_t *)(reply_eth + 1);
 
-    /* The new ethernet header */
-    reply_eth->ether_type = htons(ethertype_ip);
-
     /*Copy the ip header to ethernet packet*/
     memcpy(reply_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
-    memcpy(old_ip + 4, old_ip_hdr, offset);
+
+    /* The new ethernet header */
+    reply_eth->ether_type = htons(ethertype_ip);
 
     /*Copy the icmp payload to icmp header*/
     memcpy(reply_icmp + 1, old_ip, icmp_offset);
