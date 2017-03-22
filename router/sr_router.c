@@ -350,30 +350,36 @@ void sr_handlepacket(struct sr_instance* sr,
         /*Search the matching routing table with packet's source ip*/
         struct sr_rt * matching_rt = search_rt(sr, ip_hdr->ip_dst);
 
+        if(matching_rt == NULL){
+          printf("matching_rt is null, terminating\n");
+          /*Sending icmp type 3 code 3 Port unreachable*/
+          send_icmp(sr,packet,len,3,0);
+          return;
+        }
+
         /*Packet is ip packet and has matching address from routing table*/
         /*Search the matching interface with the routing table*/
         struct sr_if * matching_if = sr_get_interface(sr, matching_rt->interface);
 
-        if ((matching_rt != NULL) && (matching_if != NULL)){
-          /*Allocate memory for forwarding ethernet packet*/
-          struct sr_ethernet_hdr * forward_eth = malloc(len);
-
-          /*Copy all the content from packet to forward packet*/
-          memcpy(forward_eth, packet, len);
-
-          /*Copy the new source into forward packet*/
-          memcpy(forward_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
-
-          /*Trying sending ip packet*/
-          try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)forward_eth, len, matching_if->name);
-
-          /*Free memory*/
-          free(forward_eth);
-        }
-        else{
-          printf("matching_rt or matching_if is NULL!\n");
+        if(matching_if == NULL){
+          printf("matching_if is null, terminating\n");
           return;
         }
+
+        /*Allocate memory for forwarding ethernet packet*/
+        struct sr_ethernet_hdr * forward_eth = malloc(len);
+
+        /*Copy all the content from packet to forward packet*/
+        memcpy(forward_eth, packet, len);
+
+        /*Copy the new source into forward packet*/
+        memcpy(forward_eth->ether_shost, matching_if->addr, ETHER_ADDR_LEN);
+
+        /*Trying sending ip packet*/
+        try_sending(sr, matching_rt->gw.s_addr, (uint8_t *)forward_eth, len, matching_if->name);
+
+        /*Free memory*/
+        free(forward_eth);
 
 
       }
@@ -491,7 +497,6 @@ void send_icmp(struct sr_instance* sr,
     free(reply_eth);
     free(reply_icmp);
     free(old_ip);
-
 
   }else if(type == 11){
     /*Sending type 11 icmp packet*/
