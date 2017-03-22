@@ -14,13 +14,31 @@ Known Bugs/Issues: all bugs or issues that you know of in your code
 
 
 
-Code Design: Briefly describe the design of your code and the data structures implemented. 
+Code Design: Briefly describe the design of your code and the data structures implemented.
 ICMP:
+send_icmp function is the main function which sends out various icmp packet. It allows input for type and code for icmp.
+It will be sending out three types of icmp packet (type 0, 3, 11).
+If it is type 0, it will make a new ethernet header with proper dst (to the one whos sends request) and make new icmp / ip field and memcpy into the new ethernet packet.
+Then try to sending by using Sherlock's try_sending function.
+If it is type 3, it will make a new ethernet header with proper dst (to the one whos sends the packet to the unreachable address) and make new icmp_t3 /ip field and memcpy into the new ethernet packet.
+The old ip header and the first 8 bytes of the old packet will be also copied into the new ethernet packet with proper offset.
+If it is type 11, it will make a new ethernet header with proper dst (to the one whos sends the packet to the unreachable address) and make new icmp /ip field and memcpy into the new ethernet packet.
+The old ip header and the first 8 bytes of the old packet will be also copied into the new ethernet packet with proper offset.
+
+
 IP:
+sr_handlepacket is the main function which handles all incoming packets.
+Frist, it will check if the incoming is ip packet or arp packet.
+If is ip packet, it will check if it is destined for this router. If so, it will process the packet.
+If the ip packet is destined for the router and it is icmp echo request, it will send icmp type 0 code 0 to the one requested it.
+Otherwise, it will decrease ttl by 1 and check if ttl hits 0. If so icmp type 11 code 0 packet will be sent via using send_icmp function.
+Else, the function will check if the destination address is known to the router. If the address is not known, arp packet
+will be sending out to acquire the destination address and forward the packet to the it's destination.
+Second, it will call the arp handler function to handle all the incoming arp packet.
 
 Arp:
 If packet is of type ARP - Runs Arp Handler
-Arp Handler: 
+Arp Handler:
 First check if arp entry already in my table, if it isn't add it into the cache with insert
 Check if arp_op_code is of type request, if it is, send an arp reply.
 If its not a request, then we try sending the packet in the queue.
